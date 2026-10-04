@@ -146,7 +146,14 @@ public class MainActivity extends Activity {
             ArrayList<Track> found = new ArrayList<>();
             scanMusicDir(internalRoot, false, found, 0);
             if (externalRoot != null && externalRoot.exists()) scanMusicDir(externalRoot, true, found, 0);
+
+            // Remove duplicate paths and sort by title.
+            LinkedHashMap<String, Track> unique = new LinkedHashMap<>();
+            for (Track t : found) unique.put(t.path, t);
+            found.clear();
+            found.addAll(unique.values());
             found.sort(Comparator.comparing(t -> t.title.toLowerCase(Locale.ROOT)));
+
             runOnUiThread(() -> {
                 allTracks.clear();
                 allTracks.addAll(found);
@@ -155,14 +162,26 @@ public class MainActivity extends Activity {
         });
     }
 
+    // The music database scans only the user's shared storage.
+    // Android/system/app/cache folders are deliberately excluded.
+    private static final HashSet<String> BLOCKED_AUDIO_DIRS = new HashSet<>(Arrays.asList(
+            "Android", "android", "System", "system", "data", "obb", "cache",
+            "caches", "lost.dir", "LOST.DIR", ".thumbnails", "thumbnails"
+    ));
+
     private void scanMusicDir(File dir, boolean ext, ArrayList<Track> out, int depth) {
-        if (dir == null || !dir.exists() || depth > 10 || out.size() > 2500) return;
+        if (dir == null || !dir.exists() || depth > 12 || out.size() > 4000) return;
+        String name = dir.getName();
+        if (BLOCKED_AUDIO_DIRS.contains(name) || name.startsWith(".")) return;
+
         File[] files = dir.listFiles();
         if (files == null) return;
+
         for (File f : files) {
             if (f.isDirectory()) {
-                String n = f.getName();
-                if (!n.equals("Android") && !n.startsWith(".")) scanMusicDir(f, ext, out, depth + 1);
+                if (!BLOCKED_AUDIO_DIRS.contains(f.getName()) && !f.getName().startsWith(".")) {
+                    scanMusicDir(f, ext, out, depth + 1);
+                }
             } else if (isAudio(f)) {
                 Track t = readMeta(f, ext);
                 if (t != null) out.add(t);
@@ -281,6 +300,10 @@ public class MainActivity extends Activity {
     }
 
     private void openSelected() {
+        if (page == 3) {
+            togglePlayerPlayback();
+            return;
+        }
         if (appIndex == 0) openFileItem();
         else if (appIndex == 1) openSetting();
         else if (appIndex == 2) openMusicItem();
@@ -338,6 +361,10 @@ public class MainActivity extends Activity {
     }
 
     private void openMusicItem() {
+        if (page == 3) {
+            togglePlayerPlayback();
+            return;
+        }
         if (page == 0) {
             musicMode = selected;
             selected = 0; groupName = "";
@@ -351,6 +378,15 @@ public class MainActivity extends Activity {
             if (visibleTracks.isEmpty()) return;
             playTrack(visibleTracks.get(selected));
         }
+    }
+
+    private void togglePlayerPlayback() {
+        if (player == null) return;
+        try {
+            if (player.isPlaying()) player.pause();
+            else player.start();
+        } catch (Exception ignored) {}
+        ui.invalidate();
     }
 
     private void playTrack(Track t) {
@@ -730,6 +766,7 @@ public class MainActivity extends Activity {
         }
 
         private void drawDisplay(Canvas c,float l,float t,float r,float b){
+            if(page==3){ drawPlayerScreen(c,l,t,r,b); return; }
             if(appIndex==0) drawFiles(c,l,t,r,b);
             else if(appIndex==1) drawSettings(c,l,t,r,b);
             else if(appIndex==2) drawMusic(c,l,t,r,b);
@@ -796,98 +833,102 @@ public class MainActivity extends Activity {
 
         private void drawFiles(Canvas c,float l,float t,float r,float b){
             if(page==0){
-                drawHomeTile(c,"סייר קבצים",0,l,t,r,b);
+                menuHeader(c,"סייר קבצים",l,t,r);
+                color(0x5539a5de); c.drawRect(l,t+d(63),r,b,p);
+                menuRow(c,"1. זיכרון פנימי",l,t+d(91),r,selected==0,false);
+                menuRow(c,"2. אחסון חיצוני",l,t+d(125),r,selected==1,false);
                 return;
             }
-            if(page==2){
+            if(page==2) {
                 menuHeader(c,"קריאת טקסט",l,t,r);
                 color(0x88448fc4); c.drawRect(l,t+d(63),r,b,p);
                 String[] ls=txtContent.split("\\r?\\n");
                 float y=t+d(89)-txtScroll;
-                for(String s:ls){ if(y>b-d(16)){y+=d(22);continue;} if(y>t+d(72)) text(c,cut(s,42),r-d(10),y,11,Color.WHITE,Paint.Align.RIGHT); y+=d(22);}
+                for(String s:ls){
+                    if(y>b-d(16)){y+=d(22);continue;}
+                    if(y>t+d(72)) text(c,cut(s,42),r-d(10),y,11,Color.WHITE,Paint.Align.RIGHT);
+                    y+=d(22);
+                }
                 return;
             }
             menuHeader(c,cut(pathLabel(currentDir),22),l,t,r);
-            if(page==1){
-                color(0x5539a5de); c.drawRect(l,t+d(63),r,b,p);
-                if(currentFiles.isEmpty()){text(c,"אין קבצים", (l+r)/2,t+d(110),15,Color.WHITE,Paint.Align.CENTER);return;}
-                int first=Math.max(0,Math.min(selected-6,Math.max(0,currentFiles.size()-9)));
-                float y=t+d(87);
-                for(int i=first;i<Math.min(currentFiles.size(),first+9);i++){
-                    File f=currentFiles.get(i);
-                    String icon=f.isDirectory()?"▣ ":isAudio(f)?"♪ ":"TXT ";
-                    menuRow(c,icon+cut(f.getName(),29),l,y,r,selected==i,isAudio(f));
-                    y+=d(33);
-                }
+            color(0x5539a5de); c.drawRect(l,t+d(63),r,b,p);
+            if(currentFiles.isEmpty()){
+                text(c,"אין קבצים נתמכים",(l+r)/2,t+d(112),15,Color.WHITE,Paint.Align.CENTER);
+                return;
+            }
+            int first=Math.max(0,Math.min(selected-6,Math.max(0,currentFiles.size()-9)));
+            float y=t+d(87);
+            for(int i=first;i<Math.min(currentFiles.size(),first+9);i++){
+                File f=currentFiles.get(i);
+                String icon=f.isDirectory()?"▣ ":isAudio(f)?"♪ ":"TXT ";
+                menuRow(c,icon+cut(f.getName(),29),l,y,r,selected==i,isAudio(f));
+                y+=d(33);
             }
         }
 
         private void drawSettings(Canvas c,float l,float t,float r,float b){
             if(page==0){
-                drawHomeTile(c,"הגדרות",1,l,t,r,b); return;
+                menuHeader(c,"הגדרות",l,t,r);
+                color(0x5539a5de);c.drawRect(l,t+d(63),r,b,p);
+                menuRow(c,"1. בהירות: "+brightness+"%",l,t+d(91),r,selected==0,false);
+                menuRow(c,"2. שומר מסך: "+(screenSaver?"פעיל":"כבוי"),l,t+d(125),r,selected==1,false);
+                menuRow(c,"3. פרטי זיכרון",l,t+d(159),r,selected==2,false);
             }
-            menuHeader(c,"הגדרות",l,t,r);
-            color(0x5539a5de);c.drawRect(l,t+d(63),r,b,p);
-            menuRow(c,"בהירות: "+brightness+"%",l,t+d(90),r,selected==0,false);
-            menuRow(c,"שומר מסך: "+(screenSaver?"פעיל":"כבוי"),l,t+d(123),r,selected==1,false);
-            menuRow(c,"פרטי זיכרון",l,t+d(156),r,selected==2,false);
         }
 
         private void drawMusic(Canvas c,float l,float t,float r,float b){
-            if(page==0){drawHomeTile(c,"מוזיקה",2,l,t,r,b);return;}
-            if(page==3){drawPlayerScreen(c,l,t,r,b);return;}
-            menuHeader(c,musicMode==2?"אמנים":musicMode==3?"אלבומים":musicMode==1?"כרטיס זיכרון":"מוזיקה",l,t,r);
-            color(0x5539a5de);c.drawRect(l,t+d(63),r,b,p);
+            if(page==0){
+                menuHeader(c,"מוזיקה",l,t,r);
+                color(0x5539a5de);c.drawRect(l,t+d(63),r,b,p);
+                menuRow(c,"1. כל השירים",l,t+d(91),r,selected==0,false);
+                menuRow(c,"2. כרטיס זיכרון",l,t+d(125),r,selected==1,false);
+                menuRow(c,"3. אמנים",l,t+d(159),r,selected==2,false);
+                menuRow(c,"4. אלבומים",l,t+d(193),r,selected==3,false);
+                return;
+            }
             if(page==1){
+                menuHeader(c,musicMode==2?"אמנים":"אלבומים",l,t,r);
+                color(0x5539a5de);c.drawRect(l,t+d(63),r,b,p);
                 if(groups.isEmpty()){text(c,"אין נתונים",(l+r)/2,t+d(110),15,Color.WHITE,Paint.Align.CENTER);return;}
                 int first=Math.max(0,Math.min(selected-6,Math.max(0,groups.size()-9)));float y=t+d(87);
                 for(int i=first;i<Math.min(groups.size(),first+9);i++){menuRow(c,cut(groups.get(i),30),l,y,r,selected==i,false);y+=d(33);}
-            } else {
+                return;
+            }
+            if(page==2){
+                menuHeader(c,groupName.isEmpty()?(musicMode==1?"כרטיס זיכרון":"כל השירים"):cut(groupName,24),l,t,r);
+                color(0x5539a5de);c.drawRect(l,t+d(63),r,b,p);
                 if(visibleTracks.isEmpty()){text(c,"אין שירים",(l+r)/2,t+d(110),15,Color.WHITE,Paint.Align.CENTER);return;}
                 int first=Math.max(0,Math.min(selected-6,Math.max(0,visibleTracks.size()-9)));float y=t+d(87);
                 for(int i=first;i<Math.min(visibleTracks.size(),first+9);i++){menuRow(c,cut(visibleTracks.get(i).title,30),l,y,r,selected==i,true);y+=d(33);}
             }
         }
 
-        private void drawPlayerScreen(Canvas c,float l,float t,float r,float b){
-            menuHeader(c,"מנגן עכשיו",l,t,r);
-            color(0x5539a5de);c.drawRect(l,t+d(63),r,b,p);
-            if(selectedFile==null){text(c,"אין רצועה",(l+r)/2,t+d(112),15,Color.WHITE,Paint.Align.CENTER);return;}
-            text(c,cut(selectedFile.getName(),29),(l+r)/2,t+d(98),16,Color.WHITE,Paint.Align.CENTER);
-            long pp=player==null?0:player.getCurrentPosition(),dd=player==null?0:player.getDuration();
-            rr(c,l+d(22),t+d(125),r-d(22),t+d(132),0xaae8f0f6,3);
-            if(dd>0) rr(c,l+d(22),t+d(125),l+d(22)+(r-l-d(44))*Math.min(1f,pp/(float)dd),t+d(132),0xffa539a7,3);
-            text(c,formatTime(pp),l+d(22),t+d(151),10,Color.WHITE,Paint.Align.LEFT);
-            text(c,formatTime(dd),r-d(22),t+d(151),10,Color.WHITE,Paint.Align.RIGHT);
-            text(c,player!=null&&player.isPlaying()?"▶":"Ⅱ",(l+r)/2,t+d(185),28,Color.WHITE,Paint.Align.CENTER);
-            text(c,"↺",l+d(45),t+d(190),18,Color.WHITE,Paint.Align.CENTER);
-            text(c,speed+"x",(r-l)/2+l,t+d(215),11,Color.WHITE,Paint.Align.CENTER);
-            text(c,"⌁",r-d(45),t+d(190),18,Color.WHITE,Paint.Align.CENTER);
-            postInvalidateDelayed(500);
-        }
-
         private void drawBt(Canvas c,float l,float t,float r,float b){
-            if(page==0){drawHomeTile(c,"בלוטוס",3,l,t,r,b);return;}
-            menuHeader(c,"בלוטוס",l,t,r);
-            color(0x5539a5de);c.drawRect(l,t+d(63),r,b,p);
-            boolean on=bluetooth!=null&&bluetooth.isEnabled();
-            menuRow(c,"Bluetooth: "+(on?"פועל":"כבוי"),l,t+d(90),r,selected==0,false);
-            menuRow(c,"חפש התקנים",l,t+d(123),r,selected==1,false);
-            int y=156,i=2;
-            for(BluetoothDevice bd:btDevices){menuRow(c,cut(safeName(bd),26),l,t+d(y),r,selected==i,false);y+=33;i++;}
+            if(page==0){
+                menuHeader(c,"בלוטוס",l,t,r);
+                color(0x5539a5de);c.drawRect(l,t+d(63),r,b,p);
+                boolean on=bluetooth!=null&&bluetooth.isEnabled();
+                menuRow(c,"1. Bluetooth: "+(on?"פועל":"כבוי"),l,t+d(91),r,selected==0,false);
+                menuRow(c,"2. חיפוש התקנים",l,t+d(125),r,selected==1,false);
+                int y=159,i=2;
+                for(BluetoothDevice bd:btDevices){
+                    menuRow(c,(i+1)+". "+cut(safeName(bd),24),l,t+d(y),r,selected==i,false);
+                    y+=33;i++;
+                }
+            }
         }
 
         private void drawRecorder(Canvas c,float l,float t,float r,float b){
             if(page==0){
-                drawHomeTile(c,recording?"הקלטה":"רשמקול",4,l,t,r,b); return;
+                menuHeader(c,"רשמקול",l,t,r);
+                color(0x5539a5de);c.drawRect(l,t+d(63),r,b,p);
+                menuRow(c,"1. "+(recording?"עצור הקלטה":"צור הקלטה"),l,t+d(91),r,selected==0,false);
+                menuRow(c,"2. נגן הקלטה אחרונה",l,t+d(125),r,selected==1,false);
+                if(recording) text(c,"●  מקליט עכשיו",(l+r)/2,t+d(174),14,0xffffb6c0,Paint.Align.CENTER);
             }
-            menuHeader(c,"רשמקול",l,t,r);
-            color(0x5539a5de);c.drawRect(l,t+d(63),r,b,p);
-            menuRow(c,recording?"■ עצור הקלטה":"● צור הקלטה",l,t+d(90),r,selected==0,false);
-            menuRow(c,"נגן הקלטה אחרונה",l,t+d(123),r,selected==1,false);
-            if(recording) text(c,"●  מקליט עכשיו",(l+r)/2,t+d(174),14,0xffffb6c0,Paint.Align.CENTER);
         }
-        
+
         private String formatTime(long ms){ long s=Math.max(0,ms/1000); return String.format(Locale.US,"%d:%02d",s/60,s%60); }
 
 @Override public boolean onTouchEvent(android.view.MotionEvent e) {
@@ -954,8 +995,8 @@ public class MainActivity extends Activity {
         }
 
 private void showTopOptions() {
-            if(appIndex==0 && page==1) showFileOptions();
-            else if(appIndex==2 && page==3) playerOptions();
+            if(page==3) playerOptions();
+            else if(appIndex==0 && page==1) showFileOptions();
             else if(appIndex==3) openBluetoothSettings();
             else if(appIndex==4 && page==0 && lastRecording!=null) playPath(lastRecording);
         }
