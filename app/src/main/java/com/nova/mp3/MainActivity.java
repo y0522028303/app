@@ -39,6 +39,10 @@ public class MainActivity extends Activity {
     private MediaRecorder recorder;
     private long pressStarted;
     private Runnable seekRunnable;
+    private Runnable navRepeatRunnable;
+    private int navRepeatDir = 0;
+    private boolean navLongTriggered = false;
+    private int returnPageAfterPlayer = 1;
     private int appIndex = 0;
     private int page = 0;
     private int selected = 0;
@@ -350,6 +354,7 @@ public class MainActivity extends Activity {
     }
 
     private void playTrack(Track t) {
+        returnPageAfterPlayer = page;
         selectedFile = new File(t.path);
         releasePlayer();
         try {
@@ -574,7 +579,14 @@ public class MainActivity extends Activity {
 
     private void backPressedInside() {
         stopSeeking();
-        if (page == 3) { releasePlayer(); page = 0; ui.invalidate(); return; }
+        if (page == 3) {
+            releasePlayer();
+            page = returnPageAfterPlayer;
+            if (appIndex == 0 && page == 1) refreshFiles();
+            if (appIndex == 2 && page == 2) refreshMusicView();
+            ui.invalidate();
+            return;
+        }
         if (page == 2) { page = 1; txtScroll = 0; ui.invalidate(); return; }
         if (appIndex == 0 && page == 1) {
             if (currentDir != null && !currentDir.equals(internalRoot) && !currentDir.equals(externalRoot)) {
@@ -620,6 +632,7 @@ public class MainActivity extends Activity {
 
     @Override protected void onDestroy() {
         stopSeeking();
+        stopNavRepeat();
         releasePlayer();
         if (recording) stopRecording();
         if (btReceiver != null) try { unregisterReceiver(btReceiver); } catch(Exception ignored){}
@@ -644,15 +657,15 @@ public class MainActivity extends Activity {
 
         @Override protected void onDraw(Canvas c) {
             float w=getWidth(), h=getHeight();
-            color(0xff050606); c.drawRect(0,0,w,h,p);
-            rr(c,d(10),d(5),w-d(10),h-d(5),0xff202222,22);
-            stroke(0xff3f4444,1.5f);c.drawRoundRect(d(10),d(5),w-d(10),h-d(5),d(22),d(22),p);
+            color(0xff030405); c.drawRect(0,0,w,h,p);
+            rr(c,d(10),d(5),w-d(10),h-d(5),0xff111516,22);
+            stroke(0xff3f4547,1.5f);
+            c.drawRoundRect(d(10),d(5),w-d(10),h-d(5),d(22),d(22),p);
 
             float displayTop=d(32), displayBottom=Math.min(h*.50f,d(510));
-            rr(c,d(40),displayTop,w-d(40),displayBottom,Color.WHITE,0);
-            drawDisplay(c,d(40),displayTop,w-d(40),displayBottom);
+            drawDisplayFrame(c,d(40),displayTop,w-d(40),displayBottom);
 
-            text(c,"IBusiness eXtra",w/2,d(565),32,Color.WHITE,Paint.Align.CENTER);
+            text(c,"IBusiness eXtra",w/2,d(565),32,0xffeeeeee,Paint.Align.CENTER);
             rr(c,w-d(132),d(542),w-d(55),d(578),0xffeeeeee,2);
             text(c,"16GB",w-d(93),d(566),17,0xff333333,Paint.Align.CENTER);
 
@@ -672,140 +685,242 @@ public class MainActivity extends Activity {
             text(c,"♢",cx,cy+d(10),31,Color.WHITE,Paint.Align.CENTER);
         }
 
-        private void drawDisplay(Canvas c,float l,float t,float r,float b) {
-            if (appIndex == 0) drawFiles(c,l,t,r,b);
-            else if (appIndex == 1) drawSettings(c,l,t,r,b);
-            else if (appIndex == 2) drawMusic(c,l,t,r,b);
-            else if (appIndex == 3) drawBt(c,l,t,r,b);
+        private void drawDisplayFrame(Canvas c,float l,float t,float r,float b){
+            LinearGradient bg = new LinearGradient(l,t,r,b,0xff6f839a,0xff123d66,Shader.TileMode.CLAMP);
+            p.setShader(bg); p.setStyle(Paint.Style.FILL);
+            c.drawRect(l,t,r,b,p); p.setShader(null);
+            drawCity(c,l,t,r,b);
+            drawStatus(c,l,t,r);
+            drawDisplay(c,l,t,r,b);
+        }
+
+        private void drawCity(Canvas c,float l,float t,float r,float b){
+            int bottom=(int)b;
+            color(0x553b86c4);
+            c.drawRect(l,t,r,b,p);
+            Random rrnd=new Random(41);
+            for(int i=0;i<24;i++){
+                float bw=d(9+rrnd.nextInt(23));
+                float bh=d(45+rrnd.nextInt(145));
+                float x=l+d(4)+i*((r-l-d(8))/24f);
+                color(0xAA154f85);
+                c.drawRect(x,b-bh,x+bw,b,p);
+                color(0x88e9f2ff);
+                for(int wy=0;wy<4;wy++) for(int wx=0;wx<2;wx++){
+                    float yy=b-bh+d(10)+wy*d(18), xx=x+d(4)+wx*d(7);
+                    if(yy<b-d(6)) c.drawRect(xx,yy,xx+d(3),yy+d(5),p);
+                }
+            }
+            color(0x6637a4dd); c.drawRect(l,b-d(65),r,b,p);
+            stroke(0x5568b8df,1); c.drawLine(l,b-d(65),r,b-d(65),p);
+        }
+
+        private void drawStatus(Canvas c,float l,float t,float r){
+            color(0xEEEEF2F7); c.drawRect(l,t,r,t+d(23),p);
+            Calendar now=Calendar.getInstance();
+            String tm=String.format(Locale.getDefault(),"%02d:%02d",now.get(Calendar.HOUR_OF_DAY),now.get(Calendar.MINUTE));
+            text(c,tm,r-d(9),t+d(16),10,0xff4d5a64,Paint.Align.RIGHT);
+            text(c,"▮▮  ⌁",r-d(58),t+d(16),8,0xff5c6d78,Paint.Align.RIGHT);
+            stroke(0xff61717c,1); c.drawRect(l+d(7),t+d(7),l+d(24),t+d(16),p);
+        }
+
+        private void drawDisplay(Canvas c,float l,float t,float r,float b){
+            if(appIndex==0) drawFiles(c,l,t,r,b);
+            else if(appIndex==1) drawSettings(c,l,t,r,b);
+            else if(appIndex==2) drawMusic(c,l,t,r,b);
+            else if(appIndex==3) drawBt(c,l,t,r,b);
             else drawRecorder(c,l,t,r,b);
         }
 
-        private void title(Canvas c,String s,float l,float r,float y){
-            text(c,s,(l+r)/2,y,24,0xff111111,Paint.Align.CENTER);
+        private void drawHomeTile(Canvas c,String label,int kind,float l,float t,float r,float b){
+            float wl=r-l, wt=b-t;
+            float boxL=l+wl*.12f, boxR=r-wl*.12f, boxT=t+d(55), boxB=t+wt*.63f;
+            color(0xEFFFFFFF); c.drawRect(boxL,boxT,boxR,boxB,p);
+            stroke(0xffe8ecef,2); c.drawRect(boxL,boxT,boxR,boxB,p);
+            color(0xffe2e6e9);
+            c.drawRect(boxL+d(15),boxT+d(15),boxR-d(15),boxB-d(15),p);
+            drawIcon(c,kind,(boxL+boxR)/2,(boxT+boxB)/2,Math.min(boxR-boxL,boxB-boxT)*.42f,0xffb8c0c6);
+            text(c,label,(l+r)/2,boxB+d(47),22,Color.WHITE,Paint.Align.CENTER);
+            if(label.equals(APPS[appIndex])) {
+                p.setShadowLayer(d(5),0,0,0xCC000000);
+                text(c,label,(l+r)/2,boxB+d(47),22,Color.WHITE,Paint.Align.CENTER);
+                p.clearShadowLayer();
+            }
         }
 
-        private void line(Canvas c,String s,float x,float y,boolean sel){
-            if(sel) rr(c,x-d(8),y-d(27),getWidth()-d(52),y+d(8),0xff111111,2);
-            text(c,s,getWidth()-d(60),y,17,sel?Color.WHITE:0xff111111,Paint.Align.RIGHT);
+        private void drawIcon(Canvas c,int kind,float x,float y,float s,int col){
+            stroke(col,2);
+            if(kind==0){
+                c.drawRect(x-s*.48f,y-s*.27f,x+s*.48f,y+s*.42f,p);
+                c.drawLine(x-s*.48f,y-s*.27f,x-s*.08f,y-s*.42f,p);
+                c.drawLine(x-s*.08f,y-s*.42f,x+s*.18f,y-s*.27f,p);
+                c.drawLine(x-s*.35f,y-s*.12f,x+s*.35f,y-s*.12f,p);
+            } else if(kind==1){
+                c.drawCircle(x,y,s*.34f,p);
+                c.drawCircle(x,y,s*.12f,p);
+                for(int i=0;i<8;i++){double a=i*Math.PI/4;c.drawLine(x+(float)Math.cos(a)*s*.34f,y+(float)Math.sin(a)*s*.34f,x+(float)Math.cos(a)*s*.49f,y+(float)Math.sin(a)*s*.49f,p);}
+            } else if(kind==2){
+                c.drawOval(x-s*.32f,y-s*.45f,x+s*.32f,y+s*.08f,p);
+                c.drawLine(x+s*.32f,y-s*.1f,x+s*.32f,y+s*.48f,p);
+                c.drawLine(x+s*.32f,y+s*.48f,x+s*.02f,y+s*.48f,p);
+                c.drawLine(x+s*.02f,y+s*.48f,x+s*.02f,y+s*.25f,p);
+            } else if(kind==3){
+                Path q=new Path();q.moveTo(x-s*.05f,y-s*.55f);q.lineTo(x+s*.37f,y-s*.22f);q.lineTo(x+s*.05f,y-s*.02f);q.lineTo(x+s*.4f,y+s*.27f);q.lineTo(x-s*.05f,y+s*.55f);q.close();c.drawPath(q,p);
+                c.drawLine(x-s*.22f,y-s*.33f,x-s*.22f,y+s*.35f,p);
+            } else {
+                c.drawRoundRect(x-s*.30f,y-s*.42f,x+s*.30f,y+s*.25f,d(8),d(8),p);
+                c.drawLine(x-s*.08f,y+s*.25f,x-s*.08f,y+s*.50f,p);
+                c.drawLine(x+s*.08f,y+s*.25f,x+s*.08f,y+s*.50f,p);
+                c.drawLine(x-s*.21f,y+s*.50f,x+s*.21f,y+s*.50f,p);
+            }
+        }
+
+        private void menuHeader(Canvas c,String s,float l,float t,float r){
+            color(0xffa235a5); c.drawRect(l,t+d(23),r,t+d(63),p);
+            text(c,s,r-d(12),t+d(49),17,Color.WHITE,Paint.Align.RIGHT);
+            text(c,"●",l+d(13),t+d(49),9,Color.WHITE,Paint.Align.CENTER);
+        }
+
+        private void menuRow(Canvas c,String s,float l,float y,float r,boolean sel,boolean note){
+            int bg=sel?0xffa539a7:0x661a86c4;
+            color(bg); c.drawRect(l,y-d(20),r,y+d(13),p);
+            if(note) text(c,"♪",l+d(13),y+1,15,Color.WHITE,Paint.Align.CENTER);
+            text(c,s,r-d(14),y+2,15,Color.WHITE,Paint.Align.RIGHT);
+            stroke(0x5597d7ef,1); c.drawLine(l,y+d(13),r,y+d(13),p);
         }
 
         private void drawFiles(Canvas c,float l,float t,float r,float b){
             if(page==0){
-                title(c,"סייר קבצים",l,r,t+d(36));
-                line(c,"1. זיכרון פנימי",l,t+d(90),selected==0);
-                line(c,"2. כרטיס זיכרון",l,t+d(137),selected==1);
-            } else if(page==2) {
-                title(c,"טקסט",l,r,t+d(36));
-                String[] lines=txtContent.split("\\r?\\n");
-                float y=t+d(75)-txtScroll;
-                for(String s:lines){
-                    if(y>b-d(18)){y+=d(26);continue;}
-                    if(y>t+d(58)) text(c,cut(s,38),r-d(12),y,12,0xff111111,Paint.Align.RIGHT);
-                    y+=d(22);
-                }
-            } else {
-                title(c,cut(pathLabel(currentDir),24),l,r,t+d(36));
-                if(currentFiles.isEmpty()){text(c,"אין קבצים נתמכים", (l+r)/2,t+d(92),15,0xff333333,Paint.Align.CENTER);return;}
-                int first=Math.max(0,Math.min(selected-5,Math.max(0,currentFiles.size()-8)));
-                float y=t+d(73);
-                for(int i=first;i<Math.min(currentFiles.size(),first+8);i++){
+                drawHomeTile(c,"סייר קבצים",0,l,t,r,b);
+                return;
+            }
+            if(page==2){
+                menuHeader(c,"קריאת טקסט",l,t,r);
+                color(0x88448fc4); c.drawRect(l,t+d(63),r,b,p);
+                String[] ls=txtContent.split("\\r?\\n");
+                float y=t+d(89)-txtScroll;
+                for(String s:ls){ if(y>b-d(16)){y+=d(22);continue;} if(y>t+d(72)) text(c,cut(s,42),r-d(10),y,11,Color.WHITE,Paint.Align.RIGHT); y+=d(22);}
+                return;
+            }
+            menuHeader(c,cut(pathLabel(currentDir),22),l,t,r);
+            if(page==1){
+                color(0x5539a5de); c.drawRect(l,t+d(63),r,b,p);
+                if(currentFiles.isEmpty()){text(c,"אין קבצים", (l+r)/2,t+d(110),15,Color.WHITE,Paint.Align.CENTER);return;}
+                int first=Math.max(0,Math.min(selected-6,Math.max(0,currentFiles.size()-9)));
+                float y=t+d(87);
+                for(int i=first;i<Math.min(currentFiles.size(),first+9);i++){
                     File f=currentFiles.get(i);
-                    String prefix=f.isDirectory()?"▸ ":"";
-                    if(isAudio(f))prefix="♫ ";
-                    if(isTxt(f))prefix="TXT ";
-                    line(c,prefix+cut(f.getName(),30),l,y,selected==i);
-                    y+=d(34);
+                    String icon=f.isDirectory()?"▣ ":isAudio(f)?"♪ ":"TXT ";
+                    menuRow(c,icon+cut(f.getName(),29),l,y,r,selected==i,isAudio(f));
+                    y+=d(33);
                 }
             }
         }
 
         private void drawSettings(Canvas c,float l,float t,float r,float b){
             if(page==0){
-                title(c,"הגדרות",l,r,t+d(36));
-                line(c,"בהירות: "+brightness+"%",l,t+d(90),selected==0);
-                line(c,"שומר מסך: "+(screenSaver?"פעיל":"כבוי"),l,t+d(137),selected==1);
-                line(c,"פרטי זיכרון",l,t+d(184),selected==2);
+                drawHomeTile(c,"הגדרות",1,l,t,r,b); return;
             }
+            menuHeader(c,"הגדרות",l,t,r);
+            color(0x5539a5de);c.drawRect(l,t+d(63),r,b,p);
+            menuRow(c,"בהירות: "+brightness+"%",l,t+d(90),r,selected==0,false);
+            menuRow(c,"שומר מסך: "+(screenSaver?"פעיל":"כבוי"),l,t+d(123),r,selected==1,false);
+            menuRow(c,"פרטי זיכרון",l,t+d(156),r,selected==2,false);
         }
 
         private void drawMusic(Canvas c,float l,float t,float r,float b){
-            if(page==0){
-                title(c,"מוזיקה",l,r,t+d(36));
-                line(c,"1. כל השירים",l,t+d(85),selected==0);
-                line(c,"2. כרטיס זיכרון",l,t+d(122),selected==1);
-                line(c,"3. אמנים",l,t+d(159),selected==2);
-                line(c,"4. אלבומים",l,t+d(196),selected==3);
-            } else if(page==1){
-                title(c, musicMode==2?"אמנים":"אלבומים",l,r,t+d(36));
-                if(groups.isEmpty()){text(c,"אין נתונים", (l+r)/2,t+d(95),15,0xff111111,Paint.Align.CENTER);return;}
-                int first=Math.max(0,Math.min(selected-5,Math.max(0,groups.size()-8)));float y=t+d(72);
-                for(int i=first;i<Math.min(groups.size(),first+8);i++){line(c,cut(groups.get(i),30),l,y,selected==i);y+=d(34);}
-            } else if(page==2){
-                title(c, groupName.isEmpty()?(musicMode==1?"כרטיס זיכרון":"כל השירים"):cut(groupName,24),l,r,t+d(36));
-                if(visibleTracks.isEmpty()){text(c,"אין שירים", (l+r)/2,t+d(95),15,0xff111111,Paint.Align.CENTER);return;}
-                int first=Math.max(0,Math.min(selected-5,Math.max(0,visibleTracks.size()-8)));float y=t+d(72);
-                for(int i=first;i<Math.min(visibleTracks.size(),first+8);i++){line(c,cut(visibleTracks.get(i).title,28),l,y,selected==i);y+=d(34);}
+            if(page==0){drawHomeTile(c,"מוזיקה",2,l,t,r,b);return;}
+            if(page==3){drawPlayerScreen(c,l,t,r,b);return;}
+            menuHeader(c,musicMode==2?"אמנים":musicMode==3?"אלבומים":musicMode==1?"כרטיס זיכרון":"מוזיקה",l,t,r);
+            color(0x5539a5de);c.drawRect(l,t+d(63),r,b,p);
+            if(page==1){
+                if(groups.isEmpty()){text(c,"אין נתונים",(l+r)/2,t+d(110),15,Color.WHITE,Paint.Align.CENTER);return;}
+                int first=Math.max(0,Math.min(selected-6,Math.max(0,groups.size()-9)));float y=t+d(87);
+                for(int i=first;i<Math.min(groups.size(),first+9);i++){menuRow(c,cut(groups.get(i),30),l,y,r,selected==i,false);y+=d(33);}
             } else {
-                title(c,"מנגן עכשיו",l,r,t+d(36));
-                if(selectedFile==null){text(c,"אין רצועה", (l+r)/2,t+d(95),15,0xff111111,Paint.Align.CENTER);return;}
-                text(c,cut(selectedFile.getName(),30),(l+r)/2,t+d(88),16,0xff111111,Paint.Align.CENTER);
-                long pp=player==null?0:player.getCurrentPosition(), dd=player==null?0:player.getDuration();
-                rr(c,l+d(22),t+d(118),r-d(22),t+d(125),0xffbbbbbb,3);
-                if(dd>0) rr(c,l+d(22),t+d(118),l+d(22)+(r-l-d(44))*((float)pp/(float)dd),t+d(125),0xff222222,3);
-                text(c,formatTime(pp),l+d(22),t+d(145),11,0xff333333,Paint.Align.LEFT);
-                text(c,formatTime(dd),r-d(22),t+d(145),11,0xff333333,Paint.Align.RIGHT);
-                text(c,player!=null&&player.isPlaying()?"▶":"Ⅱ",(l+r)/2,t+d(178),24,0xff111111,Paint.Align.CENTER);
-                text(c,"חזרה: "+(repeatMode==0?"כבויה":repeatMode==1?"שיר":"הכל")+"   מהירות: "+speed+"x",(l+r)/2,t+d(205),11,0xff555555,Paint.Align.CENTER);
-                postInvalidateDelayed(500);
+                if(visibleTracks.isEmpty()){text(c,"אין שירים",(l+r)/2,t+d(110),15,Color.WHITE,Paint.Align.CENTER);return;}
+                int first=Math.max(0,Math.min(selected-6,Math.max(0,visibleTracks.size()-9)));float y=t+d(87);
+                for(int i=first;i<Math.min(visibleTracks.size(),first+9);i++){menuRow(c,cut(visibleTracks.get(i).title,30),l,y,r,selected==i,true);y+=d(33);}
             }
+        }
+
+        private void drawPlayerScreen(Canvas c,float l,float t,float r,float b){
+            menuHeader(c,"מנגן עכשיו",l,t,r);
+            color(0x5539a5de);c.drawRect(l,t+d(63),r,b,p);
+            if(selectedFile==null){text(c,"אין רצועה",(l+r)/2,t+d(112),15,Color.WHITE,Paint.Align.CENTER);return;}
+            text(c,cut(selectedFile.getName(),29),(l+r)/2,t+d(98),16,Color.WHITE,Paint.Align.CENTER);
+            long pp=player==null?0:player.getCurrentPosition(),dd=player==null?0:player.getDuration();
+            rr(c,l+d(22),t+d(125),r-d(22),t+d(132),0xaae8f0f6,3);
+            if(dd>0) rr(c,l+d(22),t+d(125),l+d(22)+(r-l-d(44))*Math.min(1f,pp/(float)dd),t+d(132),0xffa539a7,3);
+            text(c,formatTime(pp),l+d(22),t+d(151),10,Color.WHITE,Paint.Align.LEFT);
+            text(c,formatTime(dd),r-d(22),t+d(151),10,Color.WHITE,Paint.Align.RIGHT);
+            text(c,player!=null&&player.isPlaying()?"▶":"Ⅱ",(l+r)/2,t+d(185),28,Color.WHITE,Paint.Align.CENTER);
+            text(c,"↺",l+d(45),t+d(190),18,Color.WHITE,Paint.Align.CENTER);
+            text(c,speed+"x",(r-l)/2+l,t+d(215),11,Color.WHITE,Paint.Align.CENTER);
+            text(c,"⌁",r-d(45),t+d(190),18,Color.WHITE,Paint.Align.CENTER);
+            postInvalidateDelayed(500);
         }
 
         private void drawBt(Canvas c,float l,float t,float r,float b){
-            if(page==0){
-                title(c,"בלוטוס",l,r,t+d(36));
-                boolean on=bluetooth!=null&&bluetooth.isEnabled();
-                line(c,"Bluetooth: "+(on?"פועל":"כבוי"),l,t+d(85),selected==0);
-                line(c,"חפש התקנים",l,t+d(122),selected==1);
-                int y=159, i=2;
-                for(BluetoothDevice d:btDevices){line(c,cut(safeName(d),26),l,t+d(y),selected==i);y+=34;i++;}
-            }
+            if(page==0){drawHomeTile(c,"בלוטוס",3,l,t,r,b);return;}
+            menuHeader(c,"בלוטוס",l,t,r);
+            color(0x5539a5de);c.drawRect(l,t+d(63),r,b,p);
+            boolean on=bluetooth!=null&&bluetooth.isEnabled();
+            menuRow(c,"Bluetooth: "+(on?"פועל":"כבוי"),l,t+d(90),r,selected==0,false);
+            menuRow(c,"חפש התקנים",l,t+d(123),r,selected==1,false);
+            int y=156,i=2;
+            for(BluetoothDevice bd:btDevices){menuRow(c,cut(safeName(bd),26),l,t+d(y),r,selected==i,false);y+=33;i++;}
         }
-
-        private String safeName(BluetoothDevice d){try{return d.getName()==null?d.getAddress():d.getName();}catch(Exception e){return d.getAddress();}}
 
         private void drawRecorder(Canvas c,float l,float t,float r,float b){
-            title(c,"רשמקול",l,r,t+d(36));
-            line(c,recording?"■ עצור הקלטה":"● צור הקלטה",l,t+d(90),selected==0);
-            line(c,"נגן הקלטה אחרונה",l,t+d(137),selected==1);
-            if(recording) text(c,"מקליט עכשיו…",(l+r)/2,t+d(190),15,0xffaa0000,Paint.Align.CENTER);
+            if(page==0){
+                drawHomeTile(c,recording?"הקלטה":"רשמקול",4,l,t,r,b); return;
+            }
+            menuHeader(c,"רשמקול",l,t,r);
+            color(0x5539a5de);c.drawRect(l,t+d(63),r,b,p);
+            menuRow(c,recording?"■ עצור הקלטה":"● צור הקלטה",l,t+d(90),r,selected==0,false);
+            menuRow(c,"נגן הקלטה אחרונה",l,t+d(123),r,selected==1,false);
+            if(recording) text(c,"●  מקליט עכשיו",(l+r)/2,t+d(174),14,0xffffb6c0,Paint.Align.CENTER);
         }
-
+        
         private String formatTime(long ms){ long s=Math.max(0,ms/1000); return String.format(Locale.US,"%d:%02d",s/60,s%60); }
 
-        @Override public boolean onTouchEvent(android.view.MotionEvent e) {
+@Override public boolean onTouchEvent(android.view.MotionEvent e) {
             float x=e.getX(), y=e.getY(), w=getWidth(), h=getHeight();
             float cy=Math.min(h-d(190),d(780)), cx=w/2;
+
+            boolean upZone=Math.abs(x-cx)<d(78)&&y>cy-d(155)&&y<cy-d(55);
+            boolean downZone=Math.abs(x-cx)<d(78)&&y>cy+d(55)&&y<cy+d(155);
+
             if(e.getAction()==MotionEvent.ACTION_DOWN){
                 pressStarted=System.currentTimeMillis();
+                navLongTriggered=false;
                 if(page==3 && Math.abs(x-(cx-d(98)))<d(55)){startSeeking(-1);return true;}
                 if(page==3 && Math.abs(x-(cx+d(98)))<d(55)){startSeeking(1);return true;}
+                if(upZone){startNavRepeat(-1);return true;}
+                if(downZone){startNavRepeat(1);return true;}
                 return true;
             }
+
             if(e.getAction()==MotionEvent.ACTION_UP){
-                stopSeeking();
                 long held=System.currentTimeMillis()-pressStarted;
-                if(y<d(710) && x<d(150)){backPressedInside();return true;}
-                if(y<d(710) && x>w-d(150)){ showTopOptions(); return true; }
-                if(Math.abs(x-cx)<d(55)&&Math.abs(y-cy)<d(55)){openSelected();return true;}
-                if(Math.abs(x-cx)<d(75)&&y<cy-d(55)&&y>cy-d(155)){move(-1);return true;}
-                if(Math.abs(x-cx)<d(75)&&y>cy+d(55)&&y<cy+d(155)){move(1);return true;}
-                if(Math.abs(y-cy)<d(65)&&x<cx-d(55)){ 
-                    if(page==3){seekBy(held>550?-10000:-5000);}
+                stopSeeking();
+                stopNavRepeat();
+
+                if(y<d(710)&&x<d(150)){backPressedInside();return true;}
+                if(y<d(710)&&x>w-d(150)){showTopOptions();return true;}
+                if(Math.abs(x-cx)<d(58)&&Math.abs(y-cy)<d(58)){openSelected();return true;}
+
+                if(upZone){ if(!navLongTriggered) move(-1); return true; }
+                if(downZone){ if(!navLongTriggered) move(1); return true; }
+
+                if(Math.abs(y-cy)<d(65)&&x<cx-d(55)){
+                    if(page==3) seekBy(held>550?-10000:-5000);
                     else setApp(appIndex-1);
                     return true;
                 }
                 if(Math.abs(y-cy)<d(65)&&x>cx+d(55)){
-                    if(page==3){seekBy(held>550?10000:5000);}
+                    if(page==3) seekBy(held>550?10000:5000);
                     else setApp(appIndex+1);
                     return true;
                 }
@@ -814,7 +929,26 @@ public class MainActivity extends Activity {
             return true;
         }
 
-        private void showTopOptions() {
+        private void startNavRepeat(final int dir){
+            stopNavRepeat();
+            navRepeatDir=dir;
+            navRepeatRunnable=new Runnable(){
+                @Override public void run(){
+                    navLongTriggered=true;
+                    move(navRepeatDir);
+                    handler.postDelayed(this,120);
+                }
+            };
+            handler.postDelayed(navRepeatRunnable,500);
+        }
+
+        private void stopNavRepeat(){
+            if(navRepeatRunnable!=null) handler.removeCallbacks(navRepeatRunnable);
+            navRepeatRunnable=null;
+            navRepeatDir=0;
+        }
+
+private void showTopOptions() {
             if(appIndex==0 && page==1) showFileOptions();
             else if(appIndex==2 && page==3) playerOptions();
             else if(appIndex==3) openBluetoothSettings();
