@@ -604,6 +604,11 @@ public class MainActivity extends Activity {
         page=0;selected=0;ui.invalidate();
     }
 
+    private String safeName(BluetoothDevice d){
+        try { return d.getName()==null ? d.getAddress() : d.getName(); }
+        catch(Exception e){ return d.getAddress(); }
+    }
+
     private void toast(String s) { Toast.makeText(this,s,Toast.LENGTH_SHORT).show(); }
 
     private String fmtBytes(long n) {
@@ -632,7 +637,7 @@ public class MainActivity extends Activity {
 
     @Override protected void onDestroy() {
         stopSeeking();
-        stopNavRepeat();
+        if (ui != null) ui.stopNavRepeat();
         releasePlayer();
         if (recording) stopRecording();
         if (btReceiver != null) try { unregisterReceiver(btReceiver); } catch(Exception ignored){}
