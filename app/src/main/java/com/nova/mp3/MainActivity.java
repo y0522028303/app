@@ -1194,7 +1194,7 @@ private void showTopOptions() {
             }
             invalidate();
         }
-creen(Canvas c,float l,float t,float r,float b){
+private void drawPlayerScreen(Canvas c,float l,float t,float r,float b){
             menuHeader(c,"מנגן עכשיו",l,t,r);
             color(0x5539a5de); c.drawRect(l,t+d(63),r,b,p);
             if(selectedFile==null){
