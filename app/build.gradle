@@ -13,11 +13,17 @@ android {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
+    signingConfigs {
+        release {
+            initWith signingConfigs.debug
+        }
+    }
     buildTypes {
         debug { applicationIdSuffix '.debug' }
         release {
             minifyEnabled false
             shrinkResources false
+            signingConfig signingConfigs.release
         }
     }
 }
