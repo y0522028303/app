@@ -2,6 +2,7 @@ package com.nova.mp3;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.content.*;
@@ -14,6 +15,7 @@ import android.provider.Settings;
 import android.text.InputType;
 import android.view.*;
 import android.widget.EditText;
+import android.widget.Toast;
 import java.io.*;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
@@ -75,9 +77,12 @@ public class MainActivity extends Activity {
         internalRoot = android.os.Environment.getExternalStorageDirectory();
         externalRoot = findExternalRoot();
         currentDir = internalRoot;
+        brightness = getPreferences(0).getInt("brightness", 100);
+        screenSaver = getPreferences(0).getBoolean("screensaver", true);
 
         ui = new Screen(this);
         setContentView(ui);
+        applyDisplaySettings();
 
         bluetooth = BluetoothAdapter.getDefaultAdapter();
         btReceiver = new BroadcastReceiver() {
@@ -311,8 +316,8 @@ public class MainActivity extends Activity {
 
     private void openSetting() {
         if (page == 0) {
-            if (selected == 0) brightness = brightness == 100 ? 50 : brightness == 50 ? 25 : 100;
-            else if (selected == 1) screenSaver = !screenSaver;
+            if (selected == 0) { brightness = brightness == 100 ? 50 : brightness == 50 ? 25 : 100; applyDisplaySettings(); }
+            else if (selected == 1) { screenSaver = !screenSaver; applyDisplaySettings(); }
             else showMemoryInfo();
             ui.invalidate();
         }
@@ -594,6 +599,13 @@ public class MainActivity extends Activity {
         double v=n/1024.0; if(v<1024)return String.format(Locale.US,"%.1f KB",v);
         v/=1024.0; if(v<1024)return String.format(Locale.US,"%.1f MB",v);
         v/=1024.0; return String.format(Locale.US,"%.1f GB",v);
+    }
+
+    private void applyDisplaySettings() {
+        WindowManager.LayoutParams lp = getWindow().getAttributes();
+        lp.screenBrightness = Math.max(0.05f, Math.min(1.0f, brightness / 100f));
+        getWindow().setAttributes(lp);
+        if (screenSaver) ui.setKeepScreenOn(false); else ui.setKeepScreenOn(true);
     }
 
     private void writeSettings() {
