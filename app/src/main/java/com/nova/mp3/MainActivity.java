@@ -1329,18 +1329,11 @@ private void drawPlayerScreen(Canvas c,float l,float t,float r,float b){
             navRepeatDir=0;
         }
 
-private void showTopOptions() {
-            if(page==3) playerOptions();
-            else if(appIndex==0 && page==1) showFileOptions();
-            else if(appIndex==3) openBluetoothSettings();
-            else if(appIndex==4 && page==0 && lastRecording!=null) playPath(lastRecording);
-        }
-
-        private void move(int d){
+private void move(int d){
             int n=displayCount();
             if(n<=0){selected=0;invalidate();return;}
             selected=(selected+d+n)%n;
-            if(page==2 && appIndex==0 && txtContent.length()>0){
+            if(page==PAGE_TEXT && appIndex==0 && txtContent.length()>0){
                 txtScroll=Math.max(0,Math.min(Math.max(0,txtContent.split("\\n").length*22-300),txtScroll+d*80));
             }
             invalidate();
