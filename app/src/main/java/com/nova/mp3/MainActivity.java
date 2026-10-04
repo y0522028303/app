@@ -807,6 +807,11 @@ public class MainActivity extends Activity {
         }
     }
 
+    private String safeName(BluetoothDevice d){
+        try { return d.getName()==null ? d.getAddress() : d.getName(); }
+        catch(Exception e){ return d.getAddress(); }
+    }
+
     private void toast(String s) { Toast.makeText(this,s,Toast.LENGTH_SHORT).show(); }
 
     private String fmtBytes(long n) {
@@ -934,6 +939,49 @@ public class MainActivity extends Activity {
             else if(appIndex==2) drawMusic(c,l,t,r,b);
             else if(appIndex==3) drawBt(c,l,t,r,b);
             else drawRecorder(c,l,t,r,b);
+        }
+
+                private void drawPlayerScreen(Canvas c,float l,float t,float r,float b){
+            menuHeader(c,"מנגן עכשיו",l,t,r);
+            color(0x5539a5de); c.drawRect(l,t+d(63),r,b,p);
+            if(selectedFile==null){
+                text(c,"אין רצועה",(l+r)/2,t+d(110),15,Color.WHITE,Paint.Align.CENTER);
+                return;
+            }
+
+            float artL=l+d(30), artT=t+d(73), artR=r-d(30), artB=t+d(184);
+            color(0xffdce4ea); c.drawRect(artL,artT,artR,artB,p);
+            if(albumArt!=null){
+                c.drawBitmap(albumArt,null,new RectF(artL,artT,artR,artB),p);
+            } else {
+                drawIcon(c,2,(artL+artR)/2,(artT+artB)/2,
+                        Math.min(artR-artL,artB-artT)*.34f,0xff6d7f8c);
+            }
+
+            text(c,cut(selectedFile.getName(),31),(l+r)/2,t+d(207),14,Color.WHITE,Paint.Align.CENTER);
+            if(currentTrack!=null){
+                text(c,cut(currentTrack.artist,27),(l+r)/2,t+d(225),10,0xffd8e6ee,Paint.Align.CENTER);
+                text(c,cut(currentTrack.album,27),(l+r)/2,t+d(241),9,0xffc1d3dc,Paint.Align.CENTER);
+            }
+
+            long pp=player==null?0:player.getCurrentPosition();
+            long dd=player==null?0:player.getDuration();
+            rr(c,l+d(18),t+d(255),r-d(18),t+d(262),0xaae8f0f6,3);
+            if(dd>0) rr(c,l+d(18),t+d(255),
+                    l+d(18)+(r-l-d(36))*Math.min(1f,pp/(float)dd),
+                    t+d(262),0xffff5aa6,3);
+
+            text(c,"✕",l+d(37),t+d(285),17,Color.WHITE,Paint.Align.CENTER);
+            text(c,"≡",l+d(79),t+d(285),17,Color.WHITE,Paint.Align.CENTER);
+            text(c,"♥",(l+r)/2,t+d(285),17,Color.WHITE,Paint.Align.CENTER);
+            text(c,"↺",r-d(39),t+d(285),17,Color.WHITE,Paint.Align.CENTER);
+
+            text(c,formatTime(pp),l+d(19),t+d(301),9,Color.WHITE,Paint.Align.LEFT);
+            text(c,formatTime(dd),r-d(19),t+d(301),9,Color.WHITE,Paint.Align.RIGHT);
+            text(c,player!=null&&player.isPlaying()?"Ⅱ":"▶",(l+r)/2,t+d(302),24,Color.WHITE,Paint.Align.CENTER);
+            text(c,"חזרה: "+(repeatMode==0?"כבויה":repeatMode==1?"שיר":"הכל")+"   "+speed+"x",
+                    (l+r)/2,t+d(323),9,Color.WHITE,Paint.Align.CENTER);
+            postInvalidateDelayed(500);
         }
 
         private void drawHomeTile(Canvas c,String label,int kind,float l,float t,float r,float b){
@@ -1111,6 +1159,19 @@ public class MainActivity extends Activity {
         }
 
         private String formatTime(long ms){ long s=Math.max(0,ms/1000); return String.format(Locale.US,"%d:%02d",s/60,s%60); }
+
+        private void showTopOptions() {
+            if(page==PAGE_PLAYER) playerOptions();
+            else if(appIndex==0 && page==PAGE_LIST) showFileOptions();
+            else if(appIndex==2 && page==PAGE_TEXT && !visibleTracks.isEmpty()) {
+                selectedFile = new File(visibleTracks.get(selected).path);
+                playerOptions();
+            } else if(appIndex==3 && page==PAGE_MENU) {
+                openBluetoothSettings();
+            } else if(appIndex==4 && page==PAGE_MENU && lastRecording!=null) {
+                playPath(lastRecording);
+            }
+        }
 
 @Override public boolean onTouchEvent(android.view.MotionEvent e) {
             float x=e.getX(), y=e.getY(), w=getWidth(), h=getHeight();
