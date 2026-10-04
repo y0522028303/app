@@ -1,3 +1,3 @@
-# Nova MP3
+# Nova Player 2.0
 
-Physical-player style Android MP3 player.
+Full-screen physical-player UI with File Explorer, Settings, Music, Bluetooth and Recorder.
