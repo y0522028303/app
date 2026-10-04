@@ -904,6 +904,29 @@ public class MainActivity extends Activity {
             }
         }
 
+        private void drawPlayerScreen(Canvas c,float l,float t,float r,float b){
+            menuHeader(c,"מנגן עכשיו",l,t,r);
+            color(0x5539a5de); c.drawRect(l,t+d(63),r,b,p);
+            if(selectedFile==null){
+                text(c,"אין רצועה",(l+r)/2,t+d(110),15,Color.WHITE,Paint.Align.CENTER);
+                return;
+            }
+            text(c,cut(selectedFile.getName(),29),(l+r)/2,t+d(97),15,Color.WHITE,Paint.Align.CENTER);
+            long pp=player==null?0:player.getCurrentPosition();
+            long dd=player==null?0:player.getDuration();
+            rr(c,l+d(22),t+d(124),r-d(22),t+d(131),0xaae8f0f6,3);
+            if(dd>0) rr(c,l+d(22),t+d(124),
+                    l+d(22)+(r-l-d(44))*Math.min(1f,pp/(float)dd),
+                    t+d(131),0xffa539a7,3);
+            text(c,formatTime(pp),l+d(22),t+d(150),10,Color.WHITE,Paint.Align.LEFT);
+            text(c,formatTime(dd),r-d(22),t+d(150),10,Color.WHITE,Paint.Align.RIGHT);
+            text(c,player!=null&&player.isPlaying()?"▶":"Ⅱ",(l+r)/2,t+d(184),28,Color.WHITE,Paint.Align.CENTER);
+            text(c,"↺",l+d(45),t+d(188),18,Color.WHITE,Paint.Align.CENTER);
+            text(c,speed+"x",(l+r)/2,t+d(214),11,Color.WHITE,Paint.Align.CENTER);
+            text(c,"⌁",r-d(45),t+d(188),18,Color.WHITE,Paint.Align.CENTER);
+            postInvalidateDelayed(500);
+        }
+
         private void drawBt(Canvas c,float l,float t,float r,float b){
             if(page==0){
                 menuHeader(c,"בלוטוס",l,t,r);
